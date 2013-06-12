@@ -1,0 +1,450 @@
+import urllib2
+import re
+import datetime
+from bs4 import BeautifulSoup
+
+#seace=Seace()
+
+@auth.requires_login()
+def grid():
+    p = db.proceso
+    e = db.evento
+    response.title = T("SEACE - My list")
+    p.enlace.readable = False
+#    p.monto.readable = False
+    p.ultima_etapa.readable = False
+    p.html_text.readable = False
+#    p.sintesis.readable = False
+#    p.items_text.readable = False
+    p.acciones.readable = False
+    p.entidad.readable = False
+    grid = SQLFORM.smartgrid(p,
+#        linked_tables = [''],
+        fields=dict(
+            proceso=[p.of_interest, p.nombre, p.entidad, p.moneda, p.monto, p.sintesis, p.items_text, p.ultima_etapa, p.acciones, p.enlace],
+            evento=[e.hito, e.tipo, e.fecha]),
+        orderby=dict(proceso=~p.monto),
+        paginate=100,
+        create=False,
+        editable = False,
+        links_in_grid = True,
+        links = dict(
+            proceso=[dict(header=T("Link"),
+                body=lambda row: A(T("Go"), _href=row.enlace, _target="_blank"))],
+            evento=[]),
+        deletable=False,
+        details=False,
+#        deletable=dict(proceso=True, evento=False),
+        selectable = lambda ids: db(db.proceso.id.belongs(ids)).update(of_interest=True),
+        maxtextlength=40,
+        showbuttontext=False,
+        exportclasses=dict(
+            xml=None,csv=None,tsv=None,html=None,tsv_with_hidden_cols=None,
+            csv_with_hidden_cols=None,json=None),
+        )
+    return dict(grid=grid)
+
+@auth.requires_login()
+def nearby_milestones():
+    e = db.evento
+    p = db.proceso
+    response.title = T('SEACE - Nearby milestones')
+    today = datetime.date.today()
+    range_begin = today - datetime.timedelta(3)
+    range_end = today + datetime.timedelta(15)
+
+    query = ((e.proceso == p.id) &
+            (p.of_interest == True) &
+            (e.fecha >= range_begin) &
+            (e.fecha <= range_end) 
+            )
+    rows = db(query).select(p.nombre, p.entidad, p.moneda, p.monto, p.enlace, p.sintesis,
+            e.tipo, e.hito, e.fecha, orderby=e.fecha|~p.monto|e.id)
+    return locals()
+
+@auth.requires_login()
+def index():
+    e = db.evento
+    p = db.proceso
+    response.title = None
+    today = datetime.date.today()
+
+    rows = db().select(p.id, p.of_interest, p.nombre, p.entidad, p.moneda, p.monto,
+            p.enlace, p.sintesis, p.items_text,
+            orderby=~p.monto)
+    return locals()
+
+@auth.requires_login()
+def add_detail_link():
+    response.title = T("SEACE - Add By Detail Link")
+
+    form = SQLFORM.factory(
+        Field('detail_link', 'text', requires=IS_URL()))
+    if form.process().accepted:
+        seace = Seace()
+        document = seace.get_page(form.vars.detail_link)
+        if not document:
+            session.flash = T('Could not download from link')
+        else:
+            if seace.parse_detail(document):
+                session.flash = T('Convocatoria added or refreshed')
+            else:
+                session.flash = T('Could not parse document')
+        redirect(URL('seace', 'index'))
+    elif form.errors:
+        response.flash = T('Enter a valid URL')
+    return dict(form=form)
+
+@auth.requires_login()
+def add_list_link():
+    response.title = T("SEACE - Add By List Link")
+
+    form = SQLFORM.factory(
+        Field('list_link', 'text', requires=IS_URL()),
+        )
+    if form.process().accepted:
+        seace = Seace()
+        p = seace.get_page(form.vars.list_link)
+        if not p:
+            session.flash = T('Could not download from link')
+        else:
+            convocatorias = seace.get_convocatoria_list_from_search_page(p)
+            n = seace.get_convocatorias(convocatorias)
+            if n:
+                session.flash = T('%d convocatorias added or refreshed' % n)
+            else:
+                session.flash = T('Did not find any convocatorias in link')
+        redirect(URL('seace', 'index'))
+    elif form.errors:
+        response.flash = T('Enter a valid URL')
+    return dict(form=form)
+
+@auth.requires_login()
+def add_numbers():
+    response.title = T("SEACE - Add By Number")
+
+    form = SQLFORM.factory(
+        Field('numeros_de_convocatoria', 'text'))
+
+    if form.process().accepted:
+        seace = Seace()
+        n = seace.get_convocatorias(set(re.findall('(\d+)', form.vars.numeros_de_convocatoria)))
+        session.flash = T("%d convocatorias added or refreshed" % n)
+        redirect(URL('seace', 'index'))
+    elif form.errors:
+        response.flash = T('Enter a valid string')
+    return dict(form=form)
+
+@auth.requires_login()
+def add_summary_words():
+    response.title = T("SEACE - Add By Summary Words")
+
+    form = SQLFORM.factory(
+        Field('palabras_sintesis', 'text'))
+
+    if form.process().accepted:
+        seace = Seace()
+        convocatorias = seace.search_words(form.vars.palabras_sintesis)
+        n = seace.get_convocatorias(convocatorias)
+        session.flash = T("%d convocatorias added or refreshed" % n)
+        redirect(URL('seace', 'index'))
+    elif form.errors:
+        response.flash = T('Enter a valid string')
+    return dict(form=form)
+
+@auth.requires_login()
+def add_date():
+    response.title = T("SEACE - Add By Date Published/Modified")
+
+    form = SQLFORM.factory(
+        Field('fecha_publicada_o_modificada', 'date'))
+
+    if form.process().accepted:
+        seace = Seace()
+#        print "Fecha ingresada", form.vars.fecha_publicada_o_modificada
+        convocatorias = seace.search_date(form.vars.fecha_publicada_o_modificada)
+        n = seace.get_convocatorias(convocatorias)
+        session.flash = T("%d convocatorias added or refreshed" % n)
+        redirect(URL('seace', 'index'))
+    elif form.errors:
+        response.flash = T('Enter a valid string')
+    return dict(form=form)
+
+class Seace:
+    SEACE_TIMEOUT = 10
+    SEACE_DETAIL_URI = "http://www.seace.gob.pe/openasportlet.asp?scriptdo=pku_opnegocio.doviewficha&_CALIFICADOR_=PORTLET.0.47.0.0.0&_REGIONID_=0&_PORTLETID_=47&_ORDERID_=0&_PAGEID_=0&_CONTENTID_=0&_USERID_=%3C!--@USERID--%3E&_PRIVILEGEID_=5"
+#    SEACE_SEARCH_URI = "http://www2.seace.gob.pe/Default.asp?_CALIFICADOR_=PORTLET.1.47.0.3.10&_REGIONID_=1&_PORTLETID_=47&_PRIVILEGEID_=5&_ORDERID_=0&_PAGEID_=3&_CONTENTID_=10&_USERID_=%3C%21--USERID--%3E&_EVENTNAME_=&_OBJECTFIRE_=&_OBJECTEVENT_=&scriptdo=pku_opnegocio.doviewoportunidades&lpcodentidad=&aplicatribunal=&lpnombre_sigla_entidad=&lpf_registro=&lpcodobjeto=&lpproc_tipo=&lpcodtiposubasta=&lpproc_num=&lpanhoentidad=2013&lpproc_sigla=&lpdep_codigo=&lpproc_numtrib=&lpanhoentidadtrib=&ptipo_bien=0&lpitem_descripcion="
+    SEACE_SEARCH_URI = "http://www2.seace.gob.pe/Default.asp?_CALIFICADOR_=PORTLET.1.47.0.3.10&_REGIONID_=1&_PORTLETID_=47&_PRIVILEGEID_=5&_ORDERID_=0&_PAGEID_=3&_CONTENTID_=10&_USERID_=%3C%21--USERID--%3E&_EVENTNAME_=&_OBJECTFIRE_=&_OBJECTEVENT_=&scriptdo=pku_opnegocio.doviewoportunidades&lpanhoentidad=2013"
+
+    def search_words(self, text):
+        wordlist = re.findall('(\w+)', text.upper())
+        results = set()
+        for word in wordlist:
+            print "Searching for term", word + "...",
+            convocatorias = self.search(self.build_search_uri_word(word))
+            if convocatorias:
+                print len(convocatorias), "results."
+                results.update(convocatorias)
+            else:
+                print "zero results."
+        print "Union of all results:", len(results), "results."
+        return results
+
+    def search_date(self, mod_date):
+        return self.search(self.build_search_uri_date(mod_date))
+        
+    def search(self, uri):
+        page = self.get_page(uri)
+        if not page:
+            return None
+        pages = []
+        pages.append(page)
+        s = re.split('P&aacute;ginas', page, 1, re.S)
+        if s:
+            pageparams = re.findall('(&lppagenum=\d+)', s[1], re.S)
+            for pageparam in pageparams:
+                page = self.get_page(uri+pageparam)
+                if page:
+                    pages.append(page)
+        results = set()
+        for p in pages:
+            results.update(self.get_convocatoria_list_from_search_page(p))
+        return results
+
+    def get_convocatoria_list_from_search_page(self, p):
+        return set(re.findall(',(\d+),', p)) if p else None
+
+    def get_convocatorias(self, items):
+        if not items:
+            return 0
+        itemlist = items if type(items) == list or type(items) == set else [items]
+        queue = len(itemlist)
+        result = 0
+        for i in itemlist:
+            print queue, "items left."
+            if self.get_convocatoria(i):
+                result += 1
+            queue -= 1
+        print "finished queue."
+        return result
+
+    def get_convocatoria(self, item, minimum_age=1800):
+        print "Item requested", item + "...",
+        cache = db.proceso(db.proceso.num_convocatoria == item)
+        if cache:
+            if cache.get('cached_on'):
+                age = (request.now - cache.get('cached_on')).seconds
+                if age < minimum_age:
+                    print "good cache found...",
+                    return False
+#        print "Downloading item", item + "...",
+        d = self.get_page(self.build_detail_uri(item))
+        if d:
+#            print "done."
+            if self.parse_detail(d):
+                return True
+            else:
+                print "Item", item, "could not be parsed."
+                return False
+        else:
+            print "could not download."
+            return False
+
+    def build_search_uri_word(self, word):
+        return self.SEACE_SEARCH_URI + "&lpitem_descripcion=" + word if word else None
+
+    def build_search_uri_date(self, d):
+#        print self.SEACE_SEARCH_URI + "&lpf_registro=" + d.strftime("%d/%m/%Y") if d else None
+        return self.SEACE_SEARCH_URI + "&lpf_registro=" + d.strftime("%d/%m/%Y") if d else None
+
+    def parse_detail(self, document):
+        """Parse from SEACE convocatoria webpage, then insert into database"""
+        if not document:
+            print "parse_detail: No document passed in."
+            return None
+        self.document = document
+        num_convocatoria = self.get_convocatoria_number()
+#        print "Parsing convocatoria", num_convocatoria + "...",
+        if not num_convocatoria:
+            return False
+
+        enlace           = self.build_detail_uri(num_convocatoria)
+        nombre           = self.get_name()
+        entidad          = self.get_entidad()
+        (moneda, monto)  = self.get_moneda_monto()
+        sintesis         = self.get_sintesis()
+        ultima_etapa     = self.get_ultima_etapa()
+        acciones         = self.get_acciones()
+        items_text       = self.get_items()
+#        sintesis        += " " + items_text
+#        print "parsed."
+        # if document contains links to other item pages, there are more items. find them.
+
+        convocatoriaexists = db.proceso(db.proceso.num_convocatoria==num_convocatoria)
+        if convocatoriaexists:
+            pass
+#            print "Updating convocatoria", num_convocatoria + "...",
+        else:
+            pass
+#            print "Inserting convocatoria", num_convocatoria + "...",
+        id_proceso = db.proceso.update_or_insert(db.proceso.num_convocatoria == num_convocatoria,
+            num_convocatoria=num_convocatoria, nombre=nombre, entidad=entidad, sintesis=sintesis,
+            moneda=moneda, monto=monto, ultima_etapa=ultima_etapa,
+            acciones=acciones, items_text=items_text, enlace=enlace, html_text=document,
+            cached_on=datetime.datetime.now())
+        if convocatoriaexists:
+            id_proceso = convocatoriaexists['id']
+        print "upserted...",
+        self.insert_calendar(id_proceso)
+        db.commit()
+        return True
+
+    def parse_detail(self, document):
+        """Parse from SEACE convocatoria webpage, then insert into database"""
+        if not document:
+            print "parse_detail: No document passed in."
+            return None
+        self.document = document
+        num_convocatoria = self.get_convocatoria_number()
+#        print "Parsing convocatoria", num_convocatoria + "...",
+        if not num_convocatoria:
+            return False
+
+        enlace           = self.build_detail_uri(num_convocatoria)
+        nombre           = self.get_name()
+        entidad          = self.get_entidad()
+        (moneda, monto)  = self.get_moneda_monto()
+        sintesis         = self.get_sintesis()
+        ultima_etapa     = self.get_ultima_etapa()
+        acciones         = self.get_acciones()
+        items_text       = self.get_items()
+#        sintesis        += " " + items_text
+#        print "parsed."
+        # if document contains links to other item pages, there are more items. find them.
+
+        convocatoriaexists = db.proceso(db.proceso.num_convocatoria==num_convocatoria)
+        if convocatoriaexists:
+            pass
+#            print "Updating convocatoria", num_convocatoria + "...",
+        else:
+            pass
+#            print "Inserting convocatoria", num_convocatoria + "...",
+        id_proceso = db.proceso.update_or_insert(db.proceso.num_convocatoria == num_convocatoria,
+            num_convocatoria=num_convocatoria, nombre=nombre, entidad=entidad, sintesis=sintesis,
+            moneda=moneda, monto=monto, ultima_etapa=ultima_etapa,
+            acciones=acciones, items_text=items_text, enlace=enlace, html_text=document,
+            cached_on=datetime.datetime.now())
+        if convocatoriaexists:
+            id_proceso = convocatoriaexists['id']
+        print "upserted...",
+        self.insert_calendar(id_proceso)
+        db.commit()
+        return True
+
+    def vote():
+        print "in vote."
+        return "Voting"
+
+    def get_convocatoria_number(self):
+        match = re.findall('lpnconvocacepto" value="(\d+)', self.document, flags=re.S)
+        return match[0] if match else None
+
+    def build_detail_uri(self, num_convocatoria):
+        return self.SEACE_DETAIL_URI + "&lpnconvoca=" + num_convocatoria if num_convocatoria else None
+
+    def get_name(self):
+        match = re.findall('<u><b>Convocatoria.*?<br>.*?(<b>.+?</b>).*?<hr>', self.document, flags=re.S)
+        return BeautifulSoup(match[0]).find('b').get_text(' ', strip=True) if match else None
+
+    def get_entidad(self):
+        match = re.findall('Entidad Contratante</u><br></b>(.+?)<br>', self.document, flags=re.S)
+        return match[0].strip() if match else None
+
+    def get_sintesis(self):
+        match = re.findall('ntesis</b></u><br>\s*?(.+?)<br>', self.document, flags=re.S)
+        return match[0].strip() if match else None
+
+    def get_moneda_monto(self):
+        match = re.findall('Valor Referencial</b></u><br>(Soles|Dolares|Euros).+?:\s+?([\d\.,]+)', self.document, flags=re.S)
+        if match:
+            moneda = {'Soles':'PEN', 'Dolares':'USD', 'Euros':'EUR'}.get(match[0][0])
+#            moneda = "USD" if match[0][0] == "Dolares" else "PEN"
+            monto = float(match[0][1].strip().replace(',',''))
+            return (moneda, monto)
+        return (None, None)
+
+    def get_ultima_etapa(self):
+        match = re.findall('&Uacute;LTIMA ETAPA\s*?: \s*?(.+?)\s*?</b>', self.document, flags=re.S)
+        return match[0].strip() if match else None
+
+    def get_acciones(self):
+        match = re.findall('(<th>Otras Acciones.+?</table>)', self.document, flags=re.S)
+        return BeautifulSoup(match[0]).get_text(' ', strip=True)
+
+    def get_items(self):
+        match = re.findall('</table>(<table.+?<th>Item.+?</table>)', self.document, flags=re.S)
+        if not match:
+            return None
+        rows = BeautifulSoup(match[0]).find_all('tr')
+        rows.pop(0) # first header row
+        rows.pop(0) # second header row
+        items = ""
+        while rows:
+            data = rows.pop(0).find_all('td')
+#            item_number = int(data[0].get_text().strip())
+            item_name = data[1].get_text().strip()
+            item_code = data[2].get_text().strip()
+            items += item_name + " " + item_code + "\n"
+            if rows: # sometimes tables don't have a hanging last row
+                rows.pop(0) # every second row is useless
+#        print items
+        return items
+
+    def insert_calendar(self, id_proceso):
+#        print "Parsing calendar...",
+        match = re.findall('Calendario\s+(.+?)</table>', self.document, flags=re.S)
+        if not match:
+#            print "not found."
+            return None
+        rows = BeautifulSoup(match[0]).find_all('tr')
+        headers = rows.pop(0).find_all('th')
+        headers.pop(0) # no use for 1st column 1st row.
+        for r in rows:
+            rowdata = r.find_all('td')
+            tipo = rowdata.pop(0).string # 1st column of row contains event type
+            for h in headers:
+                hito = re.sub("Fecha ", "", h.string)
+                match = re.search('(?P<fecha>\d+/\d+/\d+)', rowdata.pop(0).string)
+                fecha = datetime.datetime.strptime(match.group('fecha'), "%d/%m/%Y").date() if match else None
+                hitoexists = db.evento((db.evento.proceso==id_proceso) &
+                        (db.evento.tipo==tipo) &
+                        (db.evento.hito==hito))
+                if hitoexists:
+                    if hitoexists['fecha'] != fecha:
+#                        print "Proceso", id_proceso, tipo, hito, "dates", hitoexists.fecha, "and", fecha, "did not match!"
+                        hitoexists.update(fecha=fecha)
+                    else:
+                        pass
+#                        print "Same hito date", id_proceso, tipo, hito, hitoexists.fecha, "found in database, same date as new date", fecha, ". Doing nothing."
+                else:
+                    db.evento.insert(proceso=id_proceso, tipo=tipo, hito=hito, fecha=fecha)
+#        print "done."
+        return True
+
+    def get_page(self, uri):
+        if not uri:
+            return None
+        try:
+            result = urllib2.urlopen(uri, timeout=self.SEACE_TIMEOUT)
+        except:
+            print "urllib2 Timeout?"
+            return None
+        if not result:
+            return None
+        try:
+            result = result.read()
+        except:
+            print "socket or read error?"
+            return None
+        return result
+

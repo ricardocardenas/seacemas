@@ -1,0 +1,3 @@
+#crontab
+0 8 * * * root **applications/ferco/
+

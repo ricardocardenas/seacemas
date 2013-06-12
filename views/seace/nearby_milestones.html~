@@ -1,0 +1,32 @@
+{{extend 'layout.html'}}
+{{left_sidebar_enabled,right_sidebar_enabled=False,('message' in globals())}}
+
+{{ last_date = None
+   for row in rows:
+     this_date = prettydate(row.evento.fecha.date(),T)
+     if last_date <> this_date:}}
+</ul>
+{{     =H2(this_date.capitalize())}}
+<ul>
+{{     pass
+     if row.proceso.monto:
+        monto = row.proceso.moneda + " " + '{:,.0f}'.format(row.proceso.monto)
+     else:
+        monto = "(Valor Reservado)"
+        pass
+     nombre = row.proceso.nombre[:50].title() + (None if len(row.proceso.nombre) <= 50 else "...")
+     hitostyle = "color:red;font-weight:bold;text-transform:uppercase" if row.evento.hito == "Fin" else ""
+     montostyle = "font-weight:bold" if row.proceso.monto > 1000000 else ""
+}}
+{{=LI(SPAN(row.evento.hito, _style=hitostyle), " ", row.evento.tipo, " de ",
+    A(nombre,
+        _href=row.proceso.enlace,
+        _title="Contratante: " + row.proceso.entidad + ". Síntesis: " + row.proceso.sintesis,
+        _target="blank"),
+    " por ",
+    SPAN(monto, _style=montostyle))}}
+{{  last_date = this_date
+pass}}
+</ul>
+{{block right_sidebar}}
+{{end}}

@@ -1,0 +1,152 @@
+import re
+import datetime
+from bs4 import BeautifulSoup
+from seaceperu import *
+
+#seace=Seace()
+
+def star():
+    p = db.seace_process
+    i = db.seace_interest
+    query = ((i.person == auth.user.id) &
+            (i.process == request.vars.id))
+    row = db(query).select(i.id, i.interest_level).first()
+    if row:
+        newlevel = SEACE.cycle_interest_level(row['interest_level'])
+#        print "star(): setting interest_level to", newlevel
+        row['interest_level'] = newlevel
+        row.update_record()
+        return IMG(_src=URL("static/images", SEACE.INTEREST.get(newlevel)))
+    else:
+        i.insert(person=auth.user.id, process=request.vars.id, interest_level=SEACE.INTEREST_OPPORTUNITY)
+        return IMG(_src=URL("static/images", SEACE.INTEREST.get(SEACE.INTEREST_OPPORTUNITY)))
+
+@auth.requires_login()
+def grid():
+    p = db.seace_process
+    e = db.seace_event
+    p.enlace.readable = False
+    response.title = T("SEACE - My list")
+    grid = SQLFORM.smartgrid(p,
+#        linked_tables = [''],
+        fields=dict(
+            seace_process=[p.nombre, p.moneda, p.monto, p.sintesis, p.enlace],
+            seace_event=[e.hito, e.tipo, e.fecha]),
+        orderby=dict(seace_process=~p.monto),
+        paginate=100,
+        create=False,
+        editable = False,
+        links_in_grid = True,
+        links = dict(
+            seace_process=[dict(header=T("Link"),
+                body=lambda row: A(T("Go"), _href=row.enlace, _target="_blank"))],
+            evento=[]),
+        deletable=False,
+        details=True,
+#        deletable=dict(seace_process=True, seace_event=False),
+        maxtextlength=40,
+        showbuttontext=False,
+        exportclasses=dict(
+            xml=None,csv=None,tsv=None,html=None,tsv_with_hidden_cols=None,
+            csv_with_hidden_cols=None,json=None),
+        )
+    return dict(grid=grid)
+
+@auth.requires_login()
+def nearby_milestones():
+    e = db.seace_event
+    p = db.seace_process
+    i = db.seace_interest
+    response.title = T('SEACE - Nearby milestones')
+    today = datetime.date.today()
+    range_begin = today - datetime.timedelta(3)
+    range_end = today + datetime.timedelta(15)
+    query = ((e.proceso == p.id) &
+            (i.process == p.id) &
+            (i.person == auth.user.id) &
+            (i.interest_level.belongs((SEACE.INTEREST_OPPORTUNITY, SEACE.INTEREST_HOT))) &
+            (e.fecha >= range_begin) &
+            (e.fecha <= range_end) 
+            )
+    rows = db(query).select(p.nombre, p.entidad, p.moneda, p.monto, p.enlace, p.sintesis,
+            e.tipo, e.hito, e.fecha, orderby=e.fecha|~p.monto|e.id)
+    return locals()
+
+def getlist(query):
+    p = db.seace_process
+    e = db.seace_event
+    i = db.seace_interest
+    u = auth.user.id
+    return db(query).select(i.interest_level, p.id, p.nombre, p.entidad, p.moneda, p.monto,
+            p.enlace, p.sintesis, p.items_text,
+            left=i.on((i.process==p.id) & (i.person==auth.user.id)),
+            orderby=~p.monto)
+
+@auth.requires_login()
+def index():
+    p = db.seace_process
+    i = db.seace_interest
+    response.title = None
+    query = (p.id > 0)
+    rows = getlist(query)
+    return locals()
+
+@auth.requires_login()
+def list_all():
+    p = db.seace_process
+    i = db.seace_interest
+    response.title = None
+    query = (p.id > 0)
+    rows = getlist(query)
+    return locals()
+
+@auth.requires_login()
+def list_leads():
+    p = db.seace_process
+    i = db.seace_interest
+    response.title = None
+    query = ((p.id == i.process) & (i.interest_level == SEACE.INTEREST_LEAD))
+    rows = getlist(query)
+    return locals()
+
+@auth.requires_login()
+def list_opportunities():
+    p = db.seace_process
+    i = db.seace_interest
+    response.title = None
+    query = ((p.id == i.process) &
+            (i.interest_level.belongs(SEACE.INTEREST_OPPORTUNITY, SEACE.INTEREST_HOT)))
+    rows = getlist(query)
+    return locals()
+
+@auth.requires_login()
+def list_blocked():
+    p = db.seace_process
+    i = db.seace_interest
+    u = auth.user.id
+    response.title = None
+    query = ((p.id == i.process) & (i.interest_level == SEACE.INTEREST_NOT))
+    rows = getlist(query)
+    return locals()
+
+@auth.requires_login()
+def add_search_link():
+    response.title = T("SEACE - Add By Search Link")
+
+    form = SQLFORM.factory(
+        Field('search_link', 'text', requires=IS_URL()),
+        )
+    if form.process().accepted:
+        convocatorias = SEACE.search(form.vars.search_link)
+        if not convocatorias:
+            session.flash = T('Could not download from link')
+        else:
+            n = SEACE.get_convocatorias(db, convocatorias)
+            if n:
+                session.flash = T('%d convocatorias added or refreshed' % n)
+            else:
+                session.flash = T('Did not find any convocatorias in link')
+        redirect(URL('seace', 'grid'))
+    elif form.errors:
+        response.flash = T('Enter a valid URL')
+    return dict(form=form)

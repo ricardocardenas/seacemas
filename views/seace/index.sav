@@ -1,0 +1,38 @@
+{{extend 'layout.html'}}
+{{left_sidebar_enabled,right_sidebar_enabled=False,('message' in globals())}}
+
+<form><input type="hidden" id="id" name="id" value="" /></form>
+<table border="2" width="100%">
+<tr><th width="7%">Star</th><th width="33%">Nombre</th><th width="46%">Síntesis</th><th width="14%">Monto</th></tr>
+{{   for row in rows:}}
+{{      if row.monto:
+            monto = row.moneda + " " + '{:,.0f}'.format(row.monto)
+         else:
+            monto = "(Valor Reservado)"
+         pass
+        nombre = row.nombre[:50].title() + (None if len(row.nombre) <= 50 else "...")
+        montostyle = "font-weight:bold" if row.monto > 1000000 else ""
+        if row.of_interest == True:
+            im = 'star_on.gif'
+        else:
+            im = 'star_off.gif'
+        pass
+}}
+<tr>
+<td
+onclick="jQuery('#id').val('{{=row.id}}'); ajax('star', ['id'], 'star{{=row.id}}');"
+><span 
+id="star{{=row.id}}"><img src="{{=URL("static/images",im)}}"></span></td>
+{{TD(SPAN(IMG(_src=URL("static/images",im)), _id=row.id))}}
+{{=TD(A(nombre, _href=row.enlace, _title="Contratante: " + row.entidad, _target="blank"))}}
+<td
+> 
+<a title="{{=row.items_text}}" 
+>
+{{=row.sintesis}}</a>
+
+</td>
+{{=TD(SPAN(monto, _style=montostyle))}}
+{{    pass}}
+</table>
+

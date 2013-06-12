@@ -1,0 +1,31 @@
+{{from seaceperu import SEACE}}
+{{extend 'layout.html'}}
+{{left_sidebar_enabled,right_sidebar_enabled=False,('message' in globals())}}
+
+<form><input type="hidden" id="id" name="id" value="" /></form>
+<table border="2" width="100%">
+<tr><th width="7%">Star</th><th width="33%">Nombre</th><th width="46%">Síntesis</th><th width="14%">Monto</th></tr>
+{{   for row in rows:}}
+{{      monto = row.proceso.moneda + " " + '{:,.0f}'.format(row.proceso.monto) if row.proceso.monto else "(Valor Reservado)"
+        nombre = row.proceso.nombre[:50].title() + (None if len(row.proceso.nombre) <= 50 else "...")
+        montostyle = "font-weight:bold" if row.proceso.monto > 1000000 else ""
+        im = SEACE.INTEREST.get(row.interest.interest_level)
+}}
+<tr>
+<td
+onclick="jQuery('#id').val('{{=row.proceso.id}}'); ajax('star', ['id'], 'star{{=row.proceso.id}}');"
+><span 
+id="star{{=row.proceso.id}}"><img src="{{=URL("static/images",im)}}"></span></td>
+{{TD(SPAN(IMG(_src=URL("static/images",im)), _id=row.proceso.id))}}
+{{=TD(A(nombre, _href=row.proceso.enlace, _title="Contratante: " + row.proceso.entidad, _target="blank"))}}
+<td
+> 
+<a title="{{=row.proceso.items_text}}"
+>
+{{=row.proceso.sintesis}}</a>
+
+</td>
+{{=TD(SPAN(monto, _style=montostyle))}}
+{{    pass}}
+</table>
+

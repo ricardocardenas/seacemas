@@ -1,0 +1,34 @@
+{{ from gluon.tools import prettydate }}
+<html>
+Estimado {{=u.first_name}},
+<br>
+Aquí los próximos hitos en el SEACE.
+
+{{ last_date = None
+   for row in rows:
+     this_date = prettydate(row.seace_event.fecha.date(),T)
+     if last_date <> this_date:}}
+</ul>
+{{     =H2(this_date.capitalize())}}
+<ul>
+{{     pass
+     if row.seace_process.monto:
+        monto = row.seace_process.moneda + " " + '{:,.0f}'.format(row.seace_process.monto)
+     else:
+        monto = "(Valor Reservado)"
+        pass
+     nombre = row.seace_process.nombre[:50].title() + (None if len(row.seace_process.nombre) <= 50 else "...")
+     hitostyle = "color:red;font-weight:bold;text-transform:uppercase" if row.seace_event.hito == "Fin" else ""
+     montostyle = "font-weight:bold" if row.seace_process.monto > 1000000 else ""
+}}
+{{=LI(SPAN(row.seace_event.hito, _style=hitostyle), " ", row.seace_event.tipo, " de ",
+    A(nombre,
+        _href=row.seace_process.enlace,
+        _title="Contratante: " + row.seace_process.entidad + ". Síntesis: " + row.seace_process.sintesis,
+        _target="blank"),
+    " por ",
+    SPAN(monto, _style=montostyle))}}
+{{  last_date = this_date
+pass}}
+</ul>
+</html>
