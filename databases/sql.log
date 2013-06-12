@@ -1,0 +1,118 @@
+timestamp: 2013-06-11T22:44:38.390209
+CREATE TABLE auth_user(
+    id SERIAL PRIMARY KEY,
+    first_name VARCHAR(128),
+    last_name VARCHAR(128),
+    email VARCHAR(512),
+    password VARCHAR(512),
+    registration_key VARCHAR(512),
+    reset_password_key VARCHAR(512),
+    registration_id VARCHAR(512)
+);
+success!
+timestamp: 2013-06-11T22:44:38.677134
+CREATE TABLE auth_group(
+    id SERIAL PRIMARY KEY,
+    role VARCHAR(512),
+    description TEXT
+);
+success!
+timestamp: 2013-06-11T22:44:38.878747
+CREATE TABLE auth_membership(
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES auth_user (id) ON DELETE CASCADE,
+    group_id INTEGER REFERENCES auth_group (id) ON DELETE CASCADE
+);
+success!
+timestamp: 2013-06-11T22:44:38.970283
+CREATE TABLE auth_permission(
+    id SERIAL PRIMARY KEY,
+    group_id INTEGER REFERENCES auth_group (id) ON DELETE CASCADE,
+    name VARCHAR(512),
+    table_name VARCHAR(512),
+    record_id INTEGER
+);
+success!
+timestamp: 2013-06-11T22:44:39.068029
+CREATE TABLE auth_event(
+    id SERIAL PRIMARY KEY,
+    time_stamp TIMESTAMP,
+    client_ip VARCHAR(512),
+    user_id INTEGER REFERENCES auth_user (id) ON DELETE CASCADE,
+    origin VARCHAR(512),
+    description TEXT
+);
+success!
+timestamp: 2013-06-11T22:44:39.170261
+CREATE TABLE auth_cas(
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES auth_user (id) ON DELETE CASCADE,
+    created_on TIMESTAMP,
+    service VARCHAR(512),
+    ticket VARCHAR(512),
+    renew CHAR(1)
+);
+success!
+timestamp: 2013-06-11T22:44:39.278340
+CREATE TABLE seace_process(
+    id SERIAL PRIMARY KEY,
+    num_convocatoria VARCHAR(512) UNIQUE,
+    nombre VARCHAR(512),
+    entidad VARCHAR(512),
+    direccion VARCHAR(512),
+    sintesis TEXT,
+    objeto VARCHAR(512),
+    monto NUMERIC(20,2),
+    moneda VARCHAR(512),
+    ultima_etapa VARCHAR(512),
+    last_action VARCHAR(512),
+    last_action_on TIMESTAMP,
+    items_text TEXT,
+    enlace VARCHAR(512),
+    html_text TEXT,
+    action_html TEXT,
+    last_updated_on TIMESTAMP,
+    cached_on TIMESTAMP
+);
+success!
+timestamp: 2013-06-11T22:44:39.435086
+CREATE TABLE seace_event(
+    id SERIAL PRIMARY KEY,
+    proceso INTEGER REFERENCES seace_process (id) ON DELETE CASCADE,
+    tipo VARCHAR(512),
+    hito VARCHAR(512),
+    fecha TIMESTAMP
+);
+success!
+timestamp: 2013-06-11T22:44:39.702967
+CREATE TABLE seace_action(
+    id SERIAL PRIMARY KEY,
+    proceso INTEGER REFERENCES seace_process (id) ON DELETE CASCADE,
+    action_number INTEGER,
+    action_name VARCHAR(512),
+    action_date TIMESTAMP,
+    action_text VARCHAR(512)
+);
+success!
+timestamp: 2013-06-11T22:44:39.948059
+CREATE TABLE seace_item(
+    id SERIAL PRIMARY KEY,
+    proceso INTEGER REFERENCES seace_process (id) ON DELETE CASCADE,
+    item_number INTEGER,
+    item_description TEXT,
+    item_catalog_family TEXT,
+    item_quantity FLOAT8,
+    item_uom VARCHAR(512),
+    item_unit_price FLOAT8
+);
+success!
+timestamp: 2013-06-11T22:44:40.059359
+CREATE TABLE seace_interest(
+    id SERIAL PRIMARY KEY,
+    person INTEGER REFERENCES auth_user (id) ON DELETE CASCADE,
+    process INTEGER REFERENCES seace_process (id) ON DELETE CASCADE,
+    interest_level INTEGER,
+    last_routine_notification_on TIMESTAMP,
+    last_urgent_notification_on TIMESTAMP
+);
+success!
